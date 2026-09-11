@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Jeopardy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: radial-gradient(circle, #2a0845 0%, #6441A5 100%);
+            color: white;
+            overflow: hidden; /* Prevent scrolling during gameplay */
+            user-select: none;
+        }
+        
+        .jeopardy-font {
+            font-family: 'Oswald', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .board-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: auto repeat(5, 1fr);
+            gap: 8px;
+            height: calc(100vh - 120px); /* Leave room for scorebar */
+            padding: 10px;
+        }
+
+        .category-header {
+            background-color: #060CE9;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.5rem;
+            padding: 10px;
+            border: 2px solid #000;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        .clue-card {
+            background-color: #060CE9;
+            color: #FFCC00;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            border: 2px solid #000;
+            cursor: pointer;
+            text-shadow: 2px 2px 4px #000;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .clue-card:hover:not(.visited) {
+            transform: scale(1.02);
+            background-color: #1a1fff;
+        }
+
+        .clue-card.visited {
+            color: transparent;
+            cursor: default;
+            text-shadow: none;
+        }
+
+        .fullscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #060CE9;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .fullscreen-text {
+            font-size: 4rem;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px #000;
+            line-height: 1.2;
+            max-width: 90%;
+        }
+
+        .daily-double-text {
+            font-family: 'Oswald', sans-serif;
+            font-size: 6rem;
+            color: #FFCC00;
+            text-transform: uppercase;
+            text-shadow: 4px 4px 0px #000, 0 0 20px #FFCC00;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .score-input {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            font-size: 1.5rem;
+            width: 100px;
+            border-radius: 4px;
+        }
+        
+        .score-input:focus {
+            outline: none;
+            border-color: #FFCC00;
+            background: rgba(0,0,0,0.2);
+        }
+
+        /* Custom scrollbar for textarea */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3); 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5); 
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Global Fullscreen Toggle Button -->
+    <button onclick="toggleFullScreen()" class="fixed top-4 right-4 z-[9999] bg-white/10 hover:bg-white/20 border border-white/30 backdrop-blur-md text-white p-3 rounded-xl shadow-2xl transition-all flex items-center justify-center group" title="Toggle Fullscreen">
+        <!-- Expand Icon -->
+        <svg id="fs-icon-expand" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-200 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+        <!-- Compress Icon (Hidden by default) -->
+        <svg id="fs-icon-compress" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-200 group-hover:text-white transition-colors hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 14h6m0 0v6m0-6l-7 7m17-11h-6m0 0V4m0 6l7-7M4 10h6m0 0V4m0 6l-7-7m17 11h-6m0 0v6m0-6l7 7" />
+        </svg>
+    </button>
+
+    <!-- Screen 1: Setup & Import -->
+    <div id="setup-screen" class="h-screen overflow-y-auto flex flex-col items-center py-12 px-6" style="display: flex;">
+        <div class="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-2xl max-w-5xl w-full border border-white/20 my-auto">
+            <h1 class="text-5xl text-center mb-2 text-yellow-400 font-bold jeopardy-font tracking-wider">Classroom Jeopardy Maker</h1>
+            <p class="text-center text-gray-300 mb-8">Paste your question data below or let AI generate it from your notes.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="col-span-1 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Number of Teams</label>
+                        <input type="number" id="team-count" value="3" min="1" max="6" class="w-full bg-black/30 border border-gray-500 rounded p-2 text-white focus:outline-none focus:border-yellow-400">
+                    </div>
+                    
+                    <div class="pt-4 space-y-3">
+                        <button onclick="loadDemoData()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                            Load Demo Questions
+                        </button>
+                        <button onclick="copyTemplate()" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded transition">
+                            Copy Blank Template
+                        </button>
+                        <button onclick="copyCurrentJson()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded transition">
+                            📋 Copy JSON to Clipboard
+                        </button>
+                        <p class="text-xs text-gray-400 mt-1 mb-4 text-center">Teachers: Copy the JSON and paste it into a text editor (like Word or Notepad) to review and edit questions for correctness before playing.</p>
+                        <button onclick="startGame()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-4 rounded text-xl uppercase transition mt-4 shadow-[0_0_15px_rgba(234,179,8,0.5)]">
+                            Start Game
+                        </button>
+                    </div>
+
+                    <div id="setup-error" class="text-red-400 text-sm mt-2 hidden bg-red-900/50 p-2 rounded border border-red-500">
+                        Error loading data. Check your JSON format.
+                    </div>
+                    <div id="setup-success" class="text-green-400 text-sm mt-2 hidden bg-green-900/50 p-2 rounded border border-green-500">
+                        Copied to clipboard!
+                    </div>
+                </div>
+
+                <div class="col-span-2">
+                    <div class="mb-4 bg-purple-900/30 p-4 rounded-lg border border-purple-500/50">
+                        <label class="block text-sm font-bold mb-2 text-purple-300">✨ Generate from Notes (Gemini AI)</label>
+                        <textarea id="ai-notes-input" class="w-full h-32 bg-black/40 border border-purple-500/50 rounded p-3 text-white text-sm focus:outline-none focus:border-purple-400 mb-3" placeholder="Paste your study notes, textbook excerpt, or flashcards here..."></textarea>
+                        <button id="btn-generate-ai" onclick="generateWithAI()" class="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:text-gray-400 text-white font-bold py-2 px-4 rounded transition shadow-[0_0_10px_rgba(168,85,247,0.4)]">
+                            Generate Questions with AI
+                        </button>
+                    </div>
+
+                    <label class="block text-sm font-medium mb-1">Game Data (JSON Format)</label>
+                    <textarea id="game-data-input" class="w-full h-56 bg-black/40 border border-gray-500 rounded p-4 text-green-300 font-mono text-sm focus:outline-none focus:border-yellow-400 whitespace-pre" spellcheck="false"></textarea>
+                    <p class="text-xs text-gray-400 mt-2">Requires exactly 5 categories, each with 5 questions (100-500 points), and 1 Final Jeopardy question.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 2: Game Board -->
+    <div id="game-screen" style="display: none;" class="min-h-screen flex flex-col">
+        <div id="board" class="board-container flex-grow">
+            <!-- Categories and Clues injected by JS -->
+        </div>
+
+        <!-- Scoreboard Bar at the bottom -->
+        <div class="h-[100px] bg-black/60 border-t-2 border-yellow-400 flex items-center justify-between px-6">
+            <div id="teams-container" class="flex gap-6 overflow-x-auto">
+                <!-- Teams injected by JS -->
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <button onclick="confirmReturnToSetup()" class="bg-red-700/80 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg border border-red-400 uppercase tracking-wider text-sm whitespace-nowrap transition transform hover:scale-105">
+                    ⚙️ Exit to Setup
+                </button>
+                <button onclick="confirmFinalJeopardy()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-3 px-6 rounded-lg border-2 border-yellow-400 shadow-[0_0_10px_rgba(255,204,0,0.5)] uppercase tracking-wider whitespace-nowrap transition transform hover:scale-105">
+                    Final Jeopardy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen 3/4: Question & Answer Overlay -->
+    <div id="qa-overlay" class="fullscreen-overlay">
+        <div class="text-yellow-400 text-2xl font-bold mb-8 uppercase tracking-widest" id="qa-category-points">
+            CATEGORY - 100
+        </div>
+        <div id="qa-text" class="fullscreen-text mb-12">
+            Question text goes here...
+        </div>
+        
+        <div class="flex gap-4">
+            <button id="btn-show-answer" onclick="showAnswer()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-full text-xl shadow-lg transition hidden">
+                Show Answer
+            </button>
+            <button id="btn-close-qa" onclick="closeQA()" class="bg-gray-300 hover:bg-white text-black font-bold py-3 px-8 rounded-full text-xl shadow-lg transition hidden">
+                Back to Board
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen 5: Daily Double Overlay -->
+    <div id="dd-overlay" class="fullscreen-overlay" style="background: radial-gradient(circle, #000000 0%, #060CE9 100%);">
+        <div class="daily-double-text mb-8 text-center">
+            DAILY<br>DOUBLE
+        </div>
+        <button onclick="continueFromDD()" class="bg-white hover:bg-gray-200 text-blue-900 font-bold py-3 px-8 rounded-full text-xl shadow-[0_0_15px_rgba(255,255,255,0.8)] transition mt-8">
+            Continue to Clue
+        </button>
+    </div>
+
+    <!-- Screen 6: Final Jeopardy Sequence -->
+    <div id="fj-overlay" class="fullscreen-overlay" style="background: #2a0845;">
+        <div id="fj-phase-category" class="flex flex-col items-center justify-center w-full h-full">
+            <h2 class="text-3xl text-gray-300 mb-4 uppercase tracking-widest">Final Jeopardy Category</h2>
+            <div id="fj-category-text" class="fullscreen-text text-yellow-400 mb-12 uppercase">
+                CATEGORY
+            </div>
+            <p class="text-xl text-gray-400 mb-8">(Please write down your wagers)</p>
+            <button onclick="showFinalQuestion()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-full text-xl shadow-lg transition">
+                Reveal Clue
+            </button>
+        </div>
+
+        <div id="fj-phase-question" class="hidden flex flex-col items-center justify-center w-full h-full">
+            <div id="fj-question-text" class="fullscreen-text mb-12">
+                Question
+            </div>
+            <p class="text-xl text-yellow-400 mb-8">(Final Jeopardy Theme Plays - Write your answers!)</p>
+            <button onclick="showFinalAnswer()" class="bg-blue-500 hover:bg-blue-400 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg transition">
+                Show Answer
+            </button>
+        </div>
+
+        <div id="fj-phase-answer" class="hidden flex flex-col items-center justify-center w-full h-full">
+            <h2 class="text-3xl text-gray-300 mb-4 uppercase tracking-widest">Correct Response</h2>
+            <div id="fj-answer-text" class="fullscreen-text text-green-400 mb-12">
+                Answer
+            </div>
+            <div class="flex gap-4">
+                <button onclick="endGame()" class="bg-white hover:bg-gray-200 text-black font-bold py-3 px-8 rounded-full text-xl shadow-lg transition">
+                    Finish Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces native browser confirm()) -->
+    <div id="confirm-modal" class="fullscreen-overlay" style="background: rgba(0, 0, 0, 0.85); z-index: 100;">
+        <div class="bg-blue-950 border-2 border-yellow-400 p-8 rounded-xl max-w-md w-full text-center shadow-2xl space-y-6">
+            <h3 id="confirm-modal-title" class="text-3xl text-yellow-400 font-bold uppercase tracking-wide jeopardy-font">Are you sure?</h3>
+            <p id="confirm-modal-text" class="text-lg text-gray-200">This action will affect your current game.</p>
+            <div class="flex justify-center gap-4 pt-2">
+                <button id="confirm-btn-cancel" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition">Cancel</button>
+                <button id="confirm-btn-action" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-6 rounded-lg transition">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Variables ---
+        let gameData = null;
+        let numTeams = 3;
+        let scores = [];
+        let dailyDoubles = []; // Array of string IDs e.g. "cat0-q2"
+        let currentActiveClue = null;
+
+        // Default Demo Data
+        const demoData = {
+            "categories": [
+                {
+                    "name": "Science",
+                    "questions": [
+                        { "points": 100, "question": "This force keeps us on the ground.", "answer": "Gravity" },
+                        { "points": 200, "question": "H2O is the chemical formula for this.", "answer": "Water" },
+                        { "points": 300, "question": "This planet is known as the Red Planet.", "answer": "Mars" },
+                        { "points": 400, "question": "This is the hardest natural substance on Earth.", "answer": "Diamond" },
+                        { "points": 500, "question": "This scientist developed the theory of relativity.", "answer": "Albert Einstein" }
+                    ]
+                },
+                {
+                    "name": "Geography",
+                    "questions": [
+                        { "points": 100, "question": "This is the capital of France.", "answer": "Paris" },
+                        { "points": 200, "question": "This is the largest ocean on Earth.", "answer": "Pacific Ocean" },
+                        { "points": 300, "question": "This country has the largest land area.", "answer": "Russia" },
+                        { "points": 400, "question": "This is the longest river in the world.", "answer": "The Nile (or Amazon)" },
+                        { "points": 500, "question": "This mountain range separates Europe and Asia.", "answer": "The Ural Mountains" }
+                    ]
+                },
+                {
+                    "name": "History",
+                    "questions": [
+                        { "points": 100, "question": "He was the first President of the USA.", "answer": "George Washington" },
+                        { "points": 200, "question": "This ship sank on its maiden voyage in 1912.", "answer": "The Titanic" },
+                        { "points": 300, "question": "This ancient civilization built the pyramids.", "answer": "The Egyptians" },
+                        { "points": 400, "question": "This war was fought between the North and South regions of the USA.", "answer": "The American Civil War" },
+                        { "points": 500, "question": "She was the primary author of the Declaration of Sentiments in 1848.", "answer": "Elizabeth Cady Stanton" }
+                    ]
+                },
+                {
+                    "name": "Math",
+                    "questions": [
+                        { "points": 100, "question": "What is 5 + 7?", "answer": "12" },
+                        { "points": 200, "question": "What is 8 times 8?", "answer": "64" },
+                        { "points": 300, "question": "How many degrees are in a right angle?", "answer": "90 degrees" },
+                        { "points": 400, "question": "What is the square root of 144?", "answer": "12" },
+                        { "points": 500, "question": "What is the top number of a fraction called?", "answer": "Numerator" }
+                    ]
+                },
+                {
+                    "name": "Pop Culture",
+                    "questions": [
+                        { "points": 100, "question": "He is the main character in the Harry Potter series.", "answer": "Harry Potter" },
+                        { "points": 200, "question": "This superhero's alter ego is Peter Parker.", "answer": "Spider-Man" },
+                        { "points": 300, "question": "This video game features a character named Mario.", "answer": "Super Mario Bros." },
+                        { "points": 400, "question": "This animated film features a snowman named Olaf.", "answer": "Frozen" },
+                        { "points": 500, "question": "This artist holds the record for the most Grammy Awards won.", "answer": "Beyoncé" }
+                    ]
+                }
+            ],
+            "finalJeopardy": {
+                "category": "Space Exploration",
+                "question": "In 1969, this mission successfully landed the first humans on the Moon.",
+                "answer": "Apollo 11"
+            }
+        };
+
+        // --- Fullscreen Toggle Logic ---
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+                    showCustomAlert(
+                        "Fullscreen Blocked", 
+                        "The current preview environment restricts fullscreen mode. This feature will work perfectly once you save the HTML file and open it directly in a standard web browser."
+                    );
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Listen for fullscreen changes to update the button icon
+        document.addEventListener('fullscreenchange', () => {
+            const expandIcon = document.getElementById('fs-icon-expand');
+            const compressIcon = document.getElementById('fs-icon-compress');
+            if (document.fullscreenElement) {
+                expandIcon.classList.add('hidden');
+                compressIcon.classList.remove('hidden');
+            } else {
+                expandIcon.classList.remove('hidden');
+                compressIcon.classList.add('hidden');
+            }
+        });
+
+        // Initialize textarea with demo data on load
+        window.onload = () => {
+            document.getElementById('game-data-input').value = JSON.stringify(demoData, null, 4);
+        };
+
+        function loadDemoData() {
+            document.getElementById('game-data-input').value = JSON.stringify(demoData, null, 4);
+            showNotice('setup-success', 'Demo data loaded!');
+        }
+
+        function copyTemplate() {
+            const template = {
+                "categories": Array(5).fill().map((_, i) => ({
+                    "name": `Category ${i+1}`,
+                    "questions": [100, 200, 300, 400, 500].map(pts => ({
+                        "points": pts,
+                        "question": "Insert Question Here",
+                        "answer": "Insert Answer Here"
+                    }))
+                })),
+                "finalJeopardy": {
+                    "category": "Final Category",
+                    "question": "Final Question Here",
+                    "answer": "Final Answer Here"
+                }
+            };
+            const jsonStr = JSON.stringify(template, null, 4);
+            const inputEl = document.getElementById('game-data-input');
+            inputEl.value = jsonStr;
+            inputEl.focus();
+            inputEl.select();
+
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch(e) {
+                copied = false;
+            }
+
+            if (copied) {
+                showNotice('setup-success', 'Template copied to clipboard and loaded into box!');
+            } else {
+                showNotice('setup-success', 'Template loaded into box & selected! (Press Ctrl+C to copy)');
+            }
+        }
+
+        function copyCurrentJson() {
+            const inputEl = document.getElementById('game-data-input');
+            inputEl.focus();
+            inputEl.select();
+
+            let copied = false;
+            try {
+                copied = document.execCommand('copy');
+            } catch(e) {
+                copied = false;
+            }
+
+            if (copied) {
+                showNotice('setup-success', 'Game JSON copied to clipboard!');
+            } else {
+                showNotice('setup-success', 'Text selected! Press Ctrl+C or Cmd+C to copy.');
+            }
+        }
+
+        async function generateWithAI() {
+            const notes = document.getElementById('ai-notes-input').value;
+            if (!notes.trim()) {
+                showNotice('setup-error', 'Please paste some notes first!');
+                return;
+            }
+
+            const btn = document.getElementById('btn-generate-ai');
+            const originalText = btn.innerText;
+            btn.innerText = 'Generating... (Takes ~10-20s)';
+            btn.disabled = true;
+
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const prompt = `Based on the following educational notes/flashcards, generate a structured Jeopardy game.
+            
+Requirements:
+1. Create exactly 5 distinct categories derived from the notes.
+2. For each category, create exactly 5 questions.
+3. The point values for the questions MUST be exactly 100, 200, 300, 400, and 500.
+4. **Bloom's Taxonomy Difficulty Mapping:** 
+   - 100 & 200 point questions: Lower level (Remembering, Understanding - e.g., basic definitions, facts).
+   - 300 point questions: Mid level (Applying - e.g., using information in a new context).
+   - 400 & 500 point questions: Higher level (Analyzing, Evaluating, Creating - e.g., comparing concepts, synthesis, deep explanations).
+5. Create 1 Final Jeopardy question that requires synthesizing a major overarching theme from the notes.
+
+Notes to process:
+${notes}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            categories: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        name: { type: "STRING" },
+                                        questions: {
+                                            type: "ARRAY",
+                                            items: {
+                                                type: "OBJECT",
+                                                properties: {
+                                                    points: { type: "INTEGER" },
+                                                    question: { type: "STRING" },
+                                                    answer: { type: "STRING" }
+                                                },
+                                                required: ["points", "question", "answer"]
+                                            }
+                                        }
+                                    },
+                                    required: ["name", "questions"]
+                                }
+                            },
+                            finalJeopardy: {
+                                type: "OBJECT",
+                                properties: {
+                                    category: { type: "STRING" },
+                                    question: { type: "STRING" },
+                                    answer: { type: "STRING" }
+                                },
+                                required: ["category", "question", "answer"]
+                            }
+                        },
+                        required: ["categories", "finalJeopardy"]
+                    }
+                }
+            };
+
+            try {
+                // Implement exponential backoff for API robustness
+                let response;
+                let retries = 3;
+                let delay = 1000;
+                
+                while (retries > 0) {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (response.ok) break;
+                    if (response.status === 429) {
+                        retries--;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (!response.ok) throw new Error("API Request failed");
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                    const generatedJson = result.candidates[0].content.parts[0].text;
+                    const parsed = JSON.parse(generatedJson);
+                    document.getElementById('game-data-input').value = JSON.stringify(parsed, null, 4);
+                    showNotice('setup-success', 'Game generated successfully! Review the JSON below and click Start Game.');
+                } else {
+                    throw new Error("No valid response from AI");
+                }
+            } catch (e) {
+                console.error(e);
+                showNotice('setup-error', 'Error generating game from AI. Try again.');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function showNotice(elementId, msg) {
+            const el = document.getElementById(elementId);
+            el.innerText = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 3000);
+        }
+
+        function startGame() {
+            const jsonInput = document.getElementById('game-data-input').value;
+            try {
+                gameData = JSON.parse(jsonInput);
+                
+                // Basic validation
+                if (!gameData.categories || gameData.categories.length !== 5 || !gameData.finalJeopardy) {
+                    throw new Error("Invalid format: Must have 5 categories and finalJeopardy.");
+                }
+
+                numTeams = parseInt(document.getElementById('team-count').value) || 3;
+                if (numTeams < 1) numTeams = 1;
+                
+                scores = Array(numTeams).fill(0);
+                
+                // Select 2 random daily doubles (1 from first half of board, 1 from bottom half, roughly)
+                dailyDoubles = [];
+                let c1 = Math.floor(Math.random() * 5);
+                let q1 = Math.floor(Math.random() * 2) + 1; // Row 2 or 3 (200-300)
+                dailyDoubles.push(`cat${c1}-q${q1}`);
+
+                let c2 = Math.floor(Math.random() * 5);
+                while(c2 === c1) c2 = Math.floor(Math.random() * 5); // different category
+                let q2 = Math.floor(Math.random() * 2) + 3; // Row 4 or 5 (400-500)
+                dailyDoubles.push(`cat${c2}-q${q2}`);
+
+                buildBoard();
+                buildScoreboard();
+
+                document.getElementById('setup-screen').style.display = 'none';
+                document.getElementById('game-screen').style.display = 'flex';
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('setup-error').style.display = 'block';
+                setTimeout(() => document.getElementById('setup-error').style.display = 'none', 4000);
+            }
+        }
+
+        function buildBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            // Add Categories (Row 1)
+            gameData.categories.forEach(cat => {
+                const header = document.createElement('div');
+                header.className = 'category-header';
+                header.innerText = cat.name;
+                board.appendChild(header);
+            });
+
+            // Add Questions (Rows 2-6)
+            // Note: Grid builds left-to-right, top-to-bottom. We need row 1 (all 100s), row 2 (all 200s), etc.
+            for (let qIdx = 0; qIdx < 5; qIdx++) {
+                for (let cIdx = 0; cIdx < 5; cIdx++) {
+                    const clue = gameData.categories[cIdx].questions[qIdx];
+                    const card = document.createElement('div');
+                    card.className = 'clue-card';
+                    card.innerText = clue.points;
+                    card.id = `cat${cIdx}-q${qIdx}`;
+                    
+                    card.onclick = () => handleClueClick(cIdx, qIdx, card.id);
+                    
+                    board.appendChild(card);
+                }
+            }
+        }
+
+        function buildScoreboard() {
+            const container = document.getElementById('teams-container');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < numTeams; i++) {
+                const teamDiv = document.createElement('div');
+                teamDiv.className = 'flex flex-col items-center bg-blue-900/50 p-2 rounded border border-blue-400 min-w-[120px]';
+                
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = `Team ${i+1}`;
+                nameInput.className = 'bg-transparent text-center text-white font-bold mb-1 w-full uppercase focus:outline-none focus:border-b border-yellow-400';
+                
+                const scoreRow = document.createElement('div');
+                scoreRow.className = 'flex items-center gap-2';
+
+                const btnMinus = document.createElement('button');
+                btnMinus.innerText = '-';
+                btnMinus.className = 'bg-red-600 hover:bg-red-500 text-white rounded w-6 h-6 flex items-center justify-center font-bold';
+                btnMinus.onclick = () => updateScore(i, -100);
+
+                const scoreInput = document.createElement('input');
+                scoreInput.type = 'number';
+                scoreInput.value = scores[i];
+                scoreInput.id = `score-team-${i}`;
+                scoreInput.className = 'score-input';
+                scoreInput.onchange = (e) => { scores[i] = parseInt(e.target.value) || 0; };
+
+                const btnPlus = document.createElement('button');
+                btnPlus.innerText = '+';
+                btnPlus.className = 'bg-green-600 hover:bg-green-500 text-white rounded w-6 h-6 flex items-center justify-center font-bold';
+                btnPlus.onclick = () => updateScore(i, 100);
+
+                scoreRow.appendChild(btnMinus);
+                scoreRow.appendChild(scoreInput);
+                scoreRow.appendChild(btnPlus);
+
+                teamDiv.appendChild(nameInput);
+                teamDiv.appendChild(scoreRow);
+                
+                container.appendChild(teamDiv);
+            }
+        }
+
+        function updateScore(teamIdx, amount) {
+            scores[teamIdx] += amount;
+            document.getElementById(`score-team-${teamIdx}`).value = scores[teamIdx];
+        }
+
+        function handleClueClick(cIdx, qIdx, cardId) {
+            const cardElement = document.getElementById(cardId);
+            if (cardElement.classList.contains('visited')) return; // Already played
+
+            cardElement.classList.add('visited');
+            
+            const clue = gameData.categories[cIdx].questions[qIdx];
+            const categoryName = gameData.categories[cIdx].name;
+
+            currentActiveClue = {
+                category: categoryName,
+                points: clue.points,
+                question: clue.question,
+                answer: clue.answer
+            };
+
+            if (dailyDoubles.includes(cardId)) {
+                // Show Daily Double Splash
+                document.getElementById('dd-overlay').style.display = 'flex';
+            } else {
+                // Show regular question
+                openQuestion();
+            }
+        }
+
+        function continueFromDD() {
+            document.getElementById('dd-overlay').style.display = 'none';
+            openQuestion();
+        }
+
+        function openQuestion() {
+            document.getElementById('qa-category-points').innerText = `${currentActiveClue.category} - ${currentActiveClue.points}`;
+            document.getElementById('qa-text').innerText = currentActiveClue.question;
+            
+            document.getElementById('btn-show-answer').style.display = 'inline-block';
+            document.getElementById('btn-close-qa').style.display = 'none';
+            
+            document.getElementById('qa-overlay').style.display = 'flex';
+        }
+
+        function showAnswer() {
+            document.getElementById('qa-text').innerHTML = `<span class="text-green-400">Correct Response:</span><br>${currentActiveClue.answer}`;
+            document.getElementById('btn-show-answer').style.display = 'none';
+            document.getElementById('btn-close-qa').style.display = 'inline-block';
+        }
+
+        function closeQA() {
+            document.getElementById('qa-overlay').style.display = 'none';
+            currentActiveClue = null;
+        }
+
+        // Custom Modal Alert handler (graceful fallback)
+        function showCustomAlert(title, text) {
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-text').innerText = text;
+            
+            const actionBtn = document.getElementById('confirm-btn-action');
+            actionBtn.innerText = "Got it";
+            
+            const cancelBtn = document.getElementById('confirm-btn-cancel');
+            cancelBtn.style.display = 'none'; // Hide cancel button for a simple alert
+            
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'flex';
+
+            const cleanup = () => {
+                modal.style.display = 'none';
+                cancelBtn.style.display = 'inline-block'; // Restore for confirm dialogs
+                actionBtn.onclick = null;
+            };
+
+            actionBtn.onclick = cleanup;
+        }
+
+        // Custom Modal Confirmation handler (replaces browser confirm)
+        function showCustomConfirm(title, text, actionText, onConfirm) {
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-text').innerText = text;
+            
+            const actionBtn = document.getElementById('confirm-btn-action');
+            actionBtn.innerText = actionText;
+            
+            const modal = document.getElementById('confirm-modal');
+            modal.style.display = 'flex';
+
+            const cancelBtn = document.getElementById('confirm-btn-cancel');
+            
+            const cleanup = () => {
+                modal.style.display = 'none';
+                cancelBtn.onclick = null;
+                actionBtn.onclick = null;
+            };
+
+            cancelBtn.onclick = cleanup;
+            actionBtn.onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+        }
+
+        function confirmFinalJeopardy() {
+            showCustomConfirm(
+                "Start Final Jeopardy?",
+                "Are you sure you want to transition to Final Jeopardy now? This will hide the main game board.",
+                "Go to Final Jeopardy",
+                () => startFinalJeopardy()
+            );
+        }
+
+        function confirmReturnToSetup() {
+            showCustomConfirm(
+                "Return to Setup?",
+                "Warning: Returning to setup will end the current game session and reset your board progress.",
+                "End Game & Reset",
+                () => returnToSetup()
+            );
+        }
+
+        function returnToSetup() {
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('setup-screen').style.display = 'flex';
+        }
+
+        function startFinalJeopardy() {
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('fj-overlay').style.display = 'flex';
+            
+            document.getElementById('fj-category-text').innerText = gameData.finalJeopardy.category;
+            
+            // Show Phase 1
+            document.getElementById('fj-phase-category').classList.remove('hidden');
+            document.getElementById('fj-phase-question').classList.add('hidden');
+            document.getElementById('fj-phase-answer').classList.add('hidden');
+        }
+
+        function showFinalQuestion() {
+            document.getElementById('fj-phase-category').classList.add('hidden');
+            document.getElementById('fj-phase-question').classList.remove('hidden');
+            document.getElementById('fj-question-text').innerText = gameData.finalJeopardy.question;
+        }
+
+        function showFinalAnswer() {
+            document.getElementById('fj-phase-question').classList.add('hidden');
+            document.getElementById('fj-phase-answer').classList.remove('hidden');
+            document.getElementById('fj-answer-text').innerText = gameData.finalJeopardy.answer;
+        }
+
+        function endGame() {
+            document.getElementById('fj-overlay').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'flex';
+            // Board is hidden by CSS or remains empty, but scores are visible to determine winner.
+            document.getElementById('board').innerHTML = '<div class="col-span-5 flex items-center justify-center text-6xl text-yellow-400 font-bold jeopardy-font h-full text-center">GAME OVER</div>';
+        }
+    </script>
+</body>
+</html>
