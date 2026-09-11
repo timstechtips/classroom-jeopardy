@@ -255,6 +255,11 @@
         <div class="daily-double-text mb-8 text-center">
             DAILY<br>DOUBLE
         </div>
+        
+        <div id="dd-scores-container" class="flex flex-wrap justify-center gap-6 mb-8 w-full max-w-4xl px-4">
+            <!-- Scores will be injected here dynamically -->
+        </div>
+
         <button onclick="continueFromDD()" class="bg-white hover:bg-gray-200 text-blue-900 font-bold py-3 px-8 rounded-full text-xl shadow-[0_0_15px_rgba(255,255,255,0.8)] transition mt-8">
             Continue to Clue
         </button>
@@ -730,6 +735,27 @@ ${notes}`;
             };
 
             if (dailyDoubles.includes(cardId)) {
+                // Populate scores before showing the overlay
+                const ddScoresContainer = document.getElementById('dd-scores-container');
+                ddScoresContainer.innerHTML = ''; // Clear previous
+                
+                // Get the team names from the inputs in the main scoreboard
+                const teamInputs = document.querySelectorAll('#teams-container input[type="text"]');
+                
+                for (let i = 0; i < numTeams; i++) {
+                    const teamName = teamInputs[i] ? teamInputs[i].value : `Team ${i+1}`;
+                    const score = scores[i];
+                    
+                    const scoreDiv = document.createElement('div');
+                    scoreDiv.className = 'bg-blue-900/80 border-2 border-yellow-400 p-4 rounded-xl min-w-[150px] text-center shadow-[0_0_10px_rgba(255,204,0,0.3)]';
+                    
+                    scoreDiv.innerHTML = `
+                        <div class="text-white font-bold uppercase mb-2 truncate">${teamName}</div>
+                        <div class="text-3xl text-yellow-400 font-bold font-mono">${score}</div>
+                    `;
+                    ddScoresContainer.appendChild(scoreDiv);
+                }
+
                 // Show Daily Double Splash
                 document.getElementById('dd-overlay').style.display = 'flex';
             } else {
