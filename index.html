@@ -193,7 +193,10 @@
 
                 <div class="col-span-2">
                     <div class="mb-4 bg-purple-900/30 p-4 rounded-lg border border-purple-500/50">
-                        <label class="block text-sm font-bold mb-2 text-purple-300">✨ Generate from Notes (Gemini AI)</label>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-sm font-bold text-purple-300">✨ Generate from Notes (Gemini AI)</label>
+                            <button onclick="showCustomAlert('How AI Generation Works', 'The AI will read your notes and construct a full 25-question board across 5 categories. It automatically scales the difficulty of the questions based on point values (100 pts = basic recall, 500 pts = complex analysis) and writes a final thematic question.')" class="text-xs text-purple-400 hover:text-purple-200 underline transition cursor-pointer">More Info</button>
+                        </div>
                         <textarea id="ai-notes-input" class="w-full h-32 bg-black/40 border border-purple-500/50 rounded p-3 text-white text-sm focus:outline-none focus:border-purple-400 mb-3" placeholder="Paste your study notes, textbook excerpt, or flashcards here..."></textarea>
                         <button id="btn-generate-ai" onclick="generateWithAI()" class="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:text-gray-400 text-white font-bold py-2 px-4 rounded transition shadow-[0_0_10px_rgba(168,85,247,0.4)]">
                             Generate Questions with AI
